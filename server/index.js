@@ -30,6 +30,7 @@ mongoose
 // socket io
 io.on("connection", (socket) => {
   console.log("socket.io connected");
+
   socket.on("createRoom", async ({ nickname }) => {
     console.log(nickname);
 
@@ -48,15 +49,44 @@ io.on("connection", (socket) => {
       const roomId = room._id.toString();
 
       socket.join(roomId);
-      io.to(roomId).emit('createRoomSuccess', room);
+      io.to(roomId).emit("createRoomSuccess", room);
     } catch (e) {
-        console.log(e);
+      console.log(e);
     }
   });
-});
 
-app.get("/", function (req, res) {
-  res.send("Hello world");
+  socket.on("joinRoom", async ({ nickname, roomId }) => {
+    try {
+      if (!roomId.match(/^[0-9a-fA-F]{24}$/)) {
+        socket.emit("errorOccurred", "Please enter a valid room Id.");
+        return;
+      }
+
+
+      let room = await Room.findById(roomId);
+
+      if (room.isJoin) {
+        let player = {
+          nickname,
+          socketID: socket.id,
+          playerType: "O",
+        };
+        socket.join(roomId);
+        room.players.push(player);
+        room.isJoin = false;
+        room = await room.save();
+        io.to(roomId).emit("joinRoomSuccess", room);
+        io.to(roomId).emit('updatePlayers', room.players);
+      } else {
+        socket.emit(
+          "errorOccurred",
+          "The game is in Progress, Please try again later"
+        );
+      }
+    } catch (e) {
+      console.log(e);
+    }
+  });
 });
 
 // app listening
